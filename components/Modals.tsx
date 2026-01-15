@@ -29,7 +29,7 @@ export const SettingsModal: React.FC<{
             <div className="space-y-8">
                 
                 <div className="space-y-3">
-                    <label className="text-xs font-bold opacity-70 uppercase tracking-wider ml-1 text-zinc-800 dark:text-zinc-200">AI Persona</label>
+                    <label className="text-xs font-bold opacity-70 uppercase tracking-wider ml-1 text-zinc-800 dark:text-zinc-200">Assistant Persona</label>
                     <div className="relative">
                         <textarea 
                             value={systemPrompt}
@@ -67,7 +67,7 @@ export const SettingsModal: React.FC<{
                 </div>
 
                 <div className="space-y-3">
-                    <label className="text-xs font-bold opacity-70 uppercase tracking-wider ml-1 text-zinc-800 dark:text-zinc-200">AI Model</label>
+                    <label className="text-xs font-bold opacity-70 uppercase tracking-wider ml-1 text-zinc-800 dark:text-zinc-200">Default Chat Model</label>
                     <div className="relative">
                         <select value={model} onChange={(e) => setModel(e.target.value)} className="w-full bg-zinc-100 dark:bg-zinc-800 border-none rounded-xl px-4 py-3.5 text-sm font-medium focus:ring-2 focus:ring-zinc-500 appearance-none text-zinc-900 dark:text-zinc-100">
                             {availableModels.length > 0 ? availableModels.map(m => <option key={m.id} value={m.id}>{m.id}</option>) : <><option value="gpt-4o-mini">gpt-4o-mini</option><option value="gpt-4o">gpt-4o</option></>}
