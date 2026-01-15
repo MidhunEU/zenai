@@ -14,7 +14,7 @@ export const SettingsModal: React.FC<{
     changeThemeMode: (m: ThemeMode) => void;
     enabledModes: Record<string, boolean>;
     toggleModeEnabled: (id: string) => void;
-    allModes: { id: AppMode; label: string; }[];
+    allModes: { id: AppMode; label: string; icon: React.ReactNode }[];
     model: string;
     setModel: (m: string) => void;
     availableModels: {id: string}[];
@@ -31,13 +31,13 @@ export const SettingsModal: React.FC<{
                 <div className="space-y-3">
                     <label className="text-xs font-bold opacity-70 uppercase tracking-wider ml-1 text-zinc-800 dark:text-zinc-200">AI Persona</label>
                     <div className="relative">
-                        <div className="absolute top-3 left-3 text-zinc-500 dark:text-zinc-400"><Icons.Sparkles size={16}/></div>
                         <textarea 
                             value={systemPrompt}
                             onChange={(e) => setSystemPrompt(e.target.value)}
                             placeholder="You are a helpful assistant..."
                             className="w-full bg-zinc-100 dark:bg-zinc-800 border-none rounded-xl pl-10 pr-4 py-3 text-sm font-medium focus:ring-2 focus:ring-zinc-500 min-h-[80px] resize-none text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-500 placeholder:opacity-100"
                         />
+                        <div className="absolute top-3 left-3 text-zinc-500 dark:text-zinc-400 pointer-events-none"><Icons.Sparkles size={16}/></div>
                     </div>
                     <p className="text-[10px] text-zinc-500 dark:text-zinc-400 px-1">Instructions for how the AI should behave.</p>
                 </div>
@@ -60,7 +60,7 @@ export const SettingsModal: React.FC<{
                     <div className="grid grid-cols-2 gap-2">
                         {allModes.map(m => (
                             <button key={m.id} onClick={() => toggleModeEnabled(m.id)} className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium transition-all border ${enabledModes[m.id] ? 'bg-zinc-900 dark:bg-zinc-100 border-transparent text-white dark:text-zinc-900 shadow-sm' : 'bg-transparent border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 opacity-80'}`}>
-                                {m.label}
+                                <span className="opacity-70">{m.icon}</span> {m.label}
                             </button>
                         ))}
                     </div>

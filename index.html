@@ -7,6 +7,18 @@
     <meta name="description" content="A minimalist, multimodal AI assistant.">
     <meta name="theme-color" content="#18181b">
     
+    <!-- Social Cards / Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Zen AI">
+    <meta property="og:description" content="A minimalist, multimodal AI assistant. Chat, Generate Images, Speech & More.">
+    <meta property="og:image" content="/card.png">
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Zen AI">
+    <meta name="twitter:description" content="A minimalist, multimodal AI assistant. Chat, Generate Images, Speech & More.">
+    <meta name="twitter:image" content="/card.png">
+    
     <!-- PWA Settings -->
     <link rel="manifest" href="manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
@@ -15,8 +27,8 @@
     <meta name="apple-mobile-web-app-title" content="Zen AI">
     
     <!-- Favicon -->
-    <link rel="icon" type="image/svg+xml" href="https://upload.wikimedia.org/wikipedia/commons/c/c0/Yin_yang_%28fixed_width%29.svg">
-    <link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/c/c0/Yin_yang_%28fixed_width%29.svg">
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="apple-touch-icon" href="/logo.png">
 
     <!-- Puter.js v2 -->
     <script src="https://js.puter.com/v2/"></script>
@@ -162,17 +174,17 @@
 {
   "imports": {
     "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react/": "https://esm.sh/react@^19.2.3/",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
+    "remark-math": "https://esm.sh/remark-math@^6.0.0",
     "remark-gfm": "https://esm.sh/remark-gfm@^4.0.1",
     "rehype-katex": "https://esm.sh/rehype-katex@^7.0.1",
-    "rehype-raw": "https://esm.sh/rehype-raw@^7.0.0",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "remark-math": "https://esm.sh/remark-math@^6.0.0",
     "rehype-highlight": "https://esm.sh/rehype-highlight@^7.0.2",
+    "jszip": "https://esm.sh/jszip@^3.10.1",
+    "rehype-raw": "https://esm.sh/rehype-raw@^7.0.0",
     "vite": "https://esm.sh/vite@^7.3.1",
-    "jszip": "https://esm.sh/jszip@^3.10.1"
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }
 }
 </script>
@@ -183,4 +195,4 @@
     <!-- Entry Point for Vite -->
     <script type="module" src="/index.tsx"></script>
 </body>
-</html><test>
+</html>

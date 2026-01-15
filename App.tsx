@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
-import { puterService } from './services/puterService';
+import { puterService, urlToBase64 } from './services/puterService';
 import { Message, ChatSession, AttachedFile, AppMode, User, ThemeMode, Toast as ToastType } from './types';
 import { Icons } from './components/Icons';
 import Sidebar from './components/Sidebar';
@@ -10,17 +10,6 @@ import { ToastContainer } from './components/Toast';
 import JSZip from 'jszip';
 
 const uuid = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
-const urlToBase64 = async (url: string) => {
-    try {
-        const response = await fetch(url);
-        const blob = await response.blob();
-        return new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.readAsDataURL(blob);
-        });
-    } catch(e) { return url; }
-};
 
 const ALL_MODES: { id: AppMode; label: string; icon: React.ReactNode }[] = [
     { id: 'chat', label: 'Chat', icon: <Icons.MessageSquare size={16} /> },
@@ -32,6 +21,7 @@ const ALL_MODES: { id: AppMode; label: string; icon: React.ReactNode }[] = [
 ];
 
 function App() {
+    // --- State ---
     const [user, setUser] = useState<User | null>(null);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -39,61 +29,65 @@ function App() {
     const [infoOpen, setInfoOpen] = useState(false);
     const [showOnboarding, setShowOnboarding] = useState(false);
     const [privateMode, setPrivateMode] = useState(false);
-    const [previewMedia, setPreviewMedia] = useState<{type: string, content: string} | null>(null);
-    const [isListening, setIsListening] = useState(false);
-    const [installPrompt, setInstallPrompt] = useState<any>(null);
-    const [toasts, setToasts] = useState<ToastType[]>([]);
     
+    // Chat & Data
     const [history, setHistory] = useState<ChatSession[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     
+    // Inputs & Processing
     const [input, setInput] = useState('');
     const [files, setFiles] = useState<AttachedFile[]>([]);
     const [mode, setMode] = useState<AppMode>('chat');
     const [isLoading, setIsLoading] = useState(false);
+    const [previewMedia, setPreviewMedia] = useState<{type: string, content: string} | null>(null);
     
+    // Config
     const [themeMode, setThemeMode] = useState<ThemeMode>('system'); 
     const [enabledModes, setEnabledModes] = useState<Record<string, boolean>>(ALL_MODES.reduce((acc, m) => ({...acc, [m.id]: true}), {}));
     const [model, setModel] = useState('gpt-4o-mini');
     const [systemPrompt, setSystemPrompt] = useState('');
     const [availableModels, setAvailableModels] = useState<{id: string}[]>([]);
-    const [isSpeechSupported, setIsSpeechSupported] = useState(false);
     
+    // Speech & Interaction
+    const [isSpeechSupported, setIsSpeechSupported] = useState(false);
+    const [isListening, setIsListening] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
+    const [installPrompt, setInstallPrompt] = useState<any>(null);
+    const [toasts, setToasts] = useState<ToastType[]>([]);
     const [showScrollDown, setShowScrollDown] = useState(false);
+
+    // Refs
     const bottomRef = useRef<HTMLDivElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const isAutoScrolling = useRef(true);
     const recognitionRef = useRef<any>(null);
     const appRef = useRef<HTMLDivElement>(null);
+    const abortController = useRef<AbortController | null>(null);
+    const dragCounter = useRef(0);
 
-    // Toast Helper - Capped at 3
+    // --- Helpers ---
     const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
         const id = uuid();
         setToasts(prev => {
             const newToasts = [...prev, { id, message, type }];
-            // Keep only the last 3 toasts
-            if (newToasts.length > 3) {
-                return newToasts.slice(newToasts.length - 3);
-            }
-            return newToasts;
+            return newToasts.length > 3 ? newToasts.slice(newToasts.length - 3) : newToasts;
         });
     }, []);
+    
     const removeToast = (id: string) => setToasts(prev => prev.filter(t => t.id !== id));
 
-    // Theme Logic & Meta Color
+    // --- Effects ---
+
+    // Theme Management
     useLayoutEffect(() => {
         const savedThemeMode = (localStorage.getItem('zen_theme_mode') as ThemeMode) || 'system';
         setThemeMode(savedThemeMode);
         
         const updateTheme = (isDark: boolean) => {
             document.documentElement.classList.toggle('dark', isDark);
-            // Update Android/Browser Theme Color
-            const metaThemeColor = document.querySelector('meta[name="theme-color"]');
-            if (metaThemeColor) {
-                metaThemeColor.setAttribute('content', isDark ? '#18181b' : '#fafafa');
-            }
+            document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark ? '#18181b' : '#fafafa');
         };
 
         const handleSystemChange = (e: MediaQueryListEvent) => { if (themeMode === 'system') updateTheme(e.matches); };
@@ -108,41 +102,31 @@ function App() {
         }
     }, [themeMode]);
 
-    const changeThemeMode = (mode: ThemeMode) => { setThemeMode(mode); localStorage.setItem('zen_theme_mode', mode); };
-
-    // Viewport Logic
+    // Viewport & Mobile Height Fixes
     useEffect(() => {
         const handleVisualViewport = () => {
             if (!window.visualViewport || !appRef.current) return;
-            
+            // On mobile, sync app height with visual viewport to avoid keyboard overlap issues
             if (window.matchMedia('(pointer: coarse)').matches) {
-                 const viewportHeight = window.visualViewport.height;
-                 appRef.current.style.height = `${viewportHeight}px`;
+                 appRef.current.style.height = `${window.visualViewport.height}px`;
                  appRef.current.style.overflow = 'hidden';
                  window.scrollTo(0, 0);
-                 
-                 if(isAutoScrolling.current) {
-                     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'auto' }), 50);
-                 }
+                 if(isAutoScrolling.current) setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'auto' }), 50);
             } else {
                 appRef.current.style.height = '100%';
             }
         };
 
-        if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', handleVisualViewport);
-            window.visualViewport.addEventListener('scroll', handleVisualViewport);
-            handleVisualViewport();
-        }
+        window.visualViewport?.addEventListener('resize', handleVisualViewport);
+        window.visualViewport?.addEventListener('scroll', handleVisualViewport);
+        handleVisualViewport();
         return () => {
-            if (window.visualViewport) {
-                window.visualViewport.removeEventListener('resize', handleVisualViewport);
-                window.visualViewport.removeEventListener('scroll', handleVisualViewport);
-            }
+            window.visualViewport?.removeEventListener('resize', handleVisualViewport);
+            window.visualViewport?.removeEventListener('scroll', handleVisualViewport);
         };
     }, []);
 
-    // Speech Logic
+    // Speech Recognition Setup
     useEffect(() => {
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             setIsSpeechSupported(true);
@@ -161,9 +145,8 @@ function App() {
                 if (finalTranscript) setInput(prev => prev + (prev && !prev.endsWith(' ') ? ' ' : '') + finalTranscript);
             };
             recognition.onerror = (e: any) => {
-                console.error("Speech error", e);
                 setIsListening(false);
-                if (e.error !== 'no-speech') showToast("Speech recognition failed", 'error');
+                if (e.error !== 'no-speech') showToast("Speech input failed", 'error');
             };
             recognition.onend = () => setIsListening(false);
             recognitionRef.current = recognition;
@@ -176,16 +159,17 @@ function App() {
         else try { recognitionRef.current.start(); } catch (e) { setIsListening(false); }
     };
 
-    // Init Logic
+    // Initialization
     useEffect(() => {
         const init = async () => {
             const handleResize = () => setIsMobile(window.innerWidth < 768);
             window.addEventListener('resize', handleResize);
             window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); setInstallPrompt(e); });
             
+            // Load Local Data
             try {
                 setHistory(JSON.parse(localStorage.getItem('zen_history') || '[]'));
-            } catch (e) { console.error(e); }
+            } catch (e) { /* Ignore corrupt history */ }
 
             setModel(localStorage.getItem('zen_model') || 'gpt-4o-mini');
             setSystemPrompt(localStorage.getItem('zen_system_prompt') || '');
@@ -193,6 +177,7 @@ function App() {
             if (savedModes) setEnabledModes(JSON.parse(savedModes));
             if (!localStorage.getItem('zen_onboarding_complete')) setShowOnboarding(true);
 
+            // Puter Check
             if (puterService.isAuthenticated()) puterService.getUser().then(setUser);
             puterService.listModels().then(m => { if (Array.isArray(m)) setAvailableModels(m); });
             
@@ -201,40 +186,57 @@ function App() {
         init();
     }, []);
 
-    const scrollToBottom = () => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); };
+    // Auto-Scroll Logic
+    const scrollToBottom = () => bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    
+    useEffect(() => { 
+        if (isAutoScrolling.current) scrollToBottom(); 
+    }, [messages, isLoading]);
+
     const handleScroll = () => {
         const el = scrollRef.current;
         if (!el) return;
-        const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-        const isNearBottom = distanceToBottom < 100;
-        isAutoScrolling.current = isNearBottom;
-        setShowScrollDown(distanceToBottom > 150);
+        const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+        const nearBottom = dist < 100;
+        isAutoScrolling.current = nearBottom;
+        setShowScrollDown(dist > 150);
     };
-    useEffect(() => { if (isAutoScrolling.current) scrollToBottom(); }, [messages, isLoading]);
 
+    // Persistence
     useEffect(() => {
         if (!privateMode) localStorage.setItem('zen_history', JSON.stringify(history));
     }, [history, privateMode]);
+
+    // --- Handlers ---
 
     const handleLogin = async () => { 
         try {
             const u = await puterService.signIn(); 
             setUser(u); 
-            if (showOnboarding) {
-                 localStorage.setItem('zen_onboarding_complete', 'true'); 
-                 setShowOnboarding(false); 
+            completeOnboarding();
+        } catch(e: any) { 
+            // Recover session if technically authenticated despite error
+            if (puterService.isAuthenticated()) {
+                try {
+                    const u = await puterService.getUser();
+                    setUser(u);
+                    completeOnboarding();
+                    return;
+                } catch(err) { console.error(err); }
             }
-        } catch(e) { showToast("Login failed", 'error'); }
-    };
-    const handleLogout = async () => { await puterService.signOut(); setUser(null); showToast("Logged out", 'info'); };
 
-    const handleSidebarToggle = (open: boolean) => {
-        if (open) {
-            if (document.activeElement instanceof HTMLElement) {
-                document.activeElement.blur();
-            }
+            // Ignorable user cancellation
+            if (e?.error === 'auth_window_closed') return;
+            
+            showToast("Login failed", 'error'); 
         }
-        setSidebarOpen(open);
+    };
+
+    const completeOnboarding = () => {
+        if (showOnboarding) {
+            localStorage.setItem('zen_onboarding_complete', 'true'); 
+            setShowOnboarding(false); 
+        }
     };
 
     const createNewChat = () => { 
@@ -243,116 +245,17 @@ function App() {
         setMessages([]); 
         setInput(''); 
         setFiles([]); 
-        if (isMobile) handleSidebarToggle(false); 
+        if (isMobile) setSidebarOpen(false); 
     };
-    
+
     const loadChat = (id: string) => {
         setPrivateMode(false);
         const s = history.find(h => h.id === id);
         if (s) { 
             setSessionId(id); 
             setMessages(s.messages); 
-            if (isMobile) handleSidebarToggle(false); 
+            if (isMobile) setSidebarOpen(false); 
         }
-    };
-    
-    const deleteChat = (id: string) => { 
-        if(!confirm("Delete?")) return; 
-        const nh = history.filter(h => h.id !== id); 
-        setHistory(nh); 
-        if (sessionId === id) createNewChat(); 
-        showToast("Chat deleted", 'info');
-    };
-    
-    const updateChatTitle = (id: string, title: string) => {
-        setHistory(prev => prev.map(h => h.id === id ? { ...h, title } : h));
-    };
-
-    // EXPORT FUNCTIONALITY
-    const exportAllChats = async () => {
-        if (!history.length && !messages.length) {
-            showToast("No data to export", 'info');
-            return;
-        }
-
-        const zip = new JSZip();
-        
-        // Add current chat if active and not saved
-        let chatsToExport = [...history];
-        if (messages.length > 0 && !sessionId) {
-            chatsToExport.push({
-                id: 'current',
-                title: 'Current Session',
-                date: new Date().toISOString(),
-                messages: messages
-            });
-        }
-
-        if(chatsToExport.length === 0) return;
-
-        showToast("Preparing export...", 'info');
-
-        try {
-            const mediaFolder = zip.folder("media");
-            
-            for (const chat of chatsToExport) {
-                let chatContent = `# ${chat.title}\nDate: ${new Date(chat.date).toLocaleString()}\n\n`;
-                
-                for (const msg of chat.messages) {
-                    chatContent += `### ${msg.role.toUpperCase()}\n`;
-                    
-                    if (msg.type === 'text') {
-                        chatContent += `${msg.content}\n\n`;
-                    } 
-                    else if (msg.type === 'image' || msg.type === 'video' || msg.type === 'audio') {
-                         // Attempt to save media files
-                         const ext = msg.type === 'image' ? 'png' : msg.type === 'video' ? 'mp4' : 'mp3';
-                         const filename = `${chat.id}_${Date.now()}_${Math.random().toString(36).substr(2,5)}.${ext}`;
-                         
-                         // If base64
-                         if (msg.content.startsWith('data:')) {
-                             const base64Data = msg.content.split(',')[1];
-                             mediaFolder?.file(filename, base64Data, {base64: true});
-                             chatContent += `![${msg.type}](media/${filename})\n\n`;
-                         } else {
-                             chatContent += `[Link to ${msg.type}](${msg.content})\n\n`;
-                         }
-                    } 
-                    else if (msg.type === 'user-media' && msg.files) {
-                         for(const f of msg.files) {
-                            chatContent += `[Attached: ${f.name}]\n`;
-                         }
-                         chatContent += `\n${msg.content}\n\n`;
-                    }
-                }
-                
-                // Sanitize filename
-                const safeTitle = chat.title.replace(/[^a-z0-9]/gi, '_').slice(0, 50);
-                zip.file(`${safeTitle}_${chat.id.slice(0,4)}.md`, chatContent);
-            }
-            
-            const content = await zip.generateAsync({ type: "blob" });
-            const url = URL.createObjectURL(content);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `zen-ai-export-${new Date().toISOString().slice(0,10)}.zip`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            showToast("Export complete!", 'success');
-        } catch (e) {
-            console.error(e);
-            showToast("Export failed", 'error');
-        }
-    };
-
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if(e.target.files) {
-            const newFiles = Array.from(e.target.files);
-            setFiles(prev => [...prev, ...newFiles.map(f => ({ name: f.name, type: f.type, content: URL.createObjectURL(f) } as any))]);
-        }
-        e.target.value = '';
     };
 
     const handleSend = async () => {
@@ -362,14 +265,21 @@ function App() {
         isAutoScrolling.current = true;
         scrollToBottom();
 
+        // New Session?
         let currentId = sessionId;
         if (!privateMode && !currentId) {
             currentId = uuid();
-            const newSess: ChatSession = { id: currentId, title: input.slice(0, 30) || (files.length ? "Media Upload" : 'New Chat'), date: new Date().toISOString(), messages: [] };
+            const newSess: ChatSession = { 
+                id: currentId, 
+                title: input.slice(0, 30) || (files.length ? "Media Upload" : 'New Chat'), 
+                date: new Date().toISOString(), 
+                messages: [] 
+            };
             setHistory(prev => [newSess, ...prev]);
             setSessionId(currentId);
         }
 
+        // Process Attachments
         const attachedFiles: AttachedFile[] = [];
         for (const f of files) {
             const content = await urlToBase64(f.content);
@@ -388,30 +298,34 @@ function App() {
         setFiles([]);
         setIsLoading(true);
 
-        try {
-            let resContent = '', resType: any = 'text', isOCR=false, isTranscribe=false;
+        abortController.current = new AbortController();
+        const signal = abortController.current.signal;
 
+        try {
             if (mode === 'chat') { 
                 const botMsgId = uuid();
                 const botMsg: Message = { role: 'assistant', content: '', type: 'text', id: botMsgId };
                 setMessages([...updatedMsgs, botMsg]);
 
                 const fullText = await puterService.streamChat(updatedMsgs, model, systemPrompt, (partial) => {
+                     if (signal.aborted) return;
                      setMessages(prev => {
                         const newArr = [...prev];
                         const idx = newArr.findIndex(m => m.id === botMsgId);
                         if (idx !== -1) newArr[idx] = { ...newArr[idx], content: partial };
                         return newArr;
                     });
-                });
+                }, signal);
                 
-                if (!privateMode && currentId) {
+                if (!privateMode && currentId && !signal.aborted) {
                      setHistory(prev => prev.map(h => h.id === currentId ? { ...h, messages: [...updatedMsgs, { role: 'assistant', content: fullText, type: 'text' }] } : h));
                 }
             } else {
+                // Generative Modes
+                let resContent = '', resType: any = 'text', isOCR=false, isTranscribe=false;
+                
                 if (mode === 'txt2img') { 
-                    resContent = await puterService.generateImage(userMsg.content); 
-                    resContent = await urlToBase64(resContent);
+                    resContent = await urlToBase64(await puterService.generateImage(userMsg.content));
                     resType = 'image'; 
                 }
                 else if (mode === 'txt2vid') { 
@@ -423,51 +337,138 @@ function App() {
                     resType = 'audio'; 
                 }
                 else if (mode === 'img2txt') {
-                     if(attachedFiles.length === 0) throw new Error("Image needed");
+                     if(!attachedFiles.length) throw new Error("Image needed");
                      resContent = await puterService.performOCR(attachedFiles[0]); 
                      isOCR = true; 
                 }
                 else if (mode === 'speech2txt') { 
-                    if(attachedFiles.length === 0) throw new Error("Audio needed");
+                    if(!attachedFiles.length) throw new Error("Audio needed");
                     resContent = await puterService.transcribeAudio(attachedFiles[0]); 
                     isTranscribe = true; 
                 }
 
-                const botMsg: Message = { role: 'assistant', content: resContent, type: resType, isOCR, isTranscribe };
-                const finalMsgs = [...updatedMsgs, botMsg];
-                setMessages(finalMsgs);
-                if (!privateMode && currentId) setHistory(prev => prev.map(h => h.id === currentId ? { ...h, messages: finalMsgs } : h));
+                if (!signal.aborted) {
+                    const botMsg: Message = { role: 'assistant', content: resContent, type: resType, isOCR, isTranscribe };
+                    const finalMsgs = [...updatedMsgs, botMsg];
+                    setMessages(finalMsgs);
+                    if (!privateMode && currentId) setHistory(prev => prev.map(h => h.id === currentId ? { ...h, messages: finalMsgs } : h));
+                }
             }
         } catch (err: any) {
+            // Gracefully handle abort without error toast
+            if (err.name === 'AbortError' || signal.aborted) {
+                // We can optionally leave the partial message or remove it. 
+                // Currently, the partial message remains in state (setMessages in callback), which is desired behavior.
+                return;
+            }
+            
             console.error(err);
             setMessages(prev => [...prev, { role: 'assistant', content: "Error: " + err.message, type: 'error' }]);
             showToast("Generation failed: " + err.message, 'error');
-        } finally { setIsLoading(false); }
+        } finally { 
+            // Cleanup controller if it matches the current session
+            if (abortController.current?.signal === signal) {
+                 setIsLoading(false); 
+                 abortController.current = null;
+            }
+        }
     };
 
+    const stopGeneration = () => {
+        if (abortController.current) {
+            abortController.current.abort();
+            // Force state update immediately for UI responsiveness
+            setIsLoading(false);
+            abortController.current = null;
+            showToast("Generation stopped", 'info');
+        }
+    };
+
+    // Drag & Drop
+    useEffect(() => {
+        const handleDrag = (e: DragEvent, type: 'enter'|'leave'|'drop'|'over') => {
+            e.preventDefault(); e.stopPropagation();
+            if (type === 'enter') { dragCounter.current++; setIsDragging(true); }
+            else if (type === 'leave') { dragCounter.current--; if(dragCounter.current === 0) setIsDragging(false); }
+            else if (type === 'drop') {
+                setIsDragging(false); dragCounter.current = 0;
+                if (e.dataTransfer?.files?.length) {
+                    const newFiles = Array.from(e.dataTransfer.files).map(f => ({ name: f.name, type: f.type, content: URL.createObjectURL(f) }));
+                    setFiles(prev => [...prev, ...newFiles]);
+                    showToast(`${newFiles.length} file(s) added`, 'success');
+                }
+            }
+        };
+        const de = (e:DragEvent) => handleDrag(e,'enter'), dl = (e:DragEvent) => handleDrag(e,'leave'), do_ = (e:DragEvent) => handleDrag(e,'over'), dd = (e:DragEvent) => handleDrag(e,'drop');
+        window.addEventListener('dragenter', de); window.addEventListener('dragleave', dl); window.addEventListener('dragover', do_); window.addEventListener('drop', dd);
+        return () => { window.removeEventListener('dragenter', de); window.removeEventListener('dragleave', dl); window.removeEventListener('dragover', do_); window.removeEventListener('drop', dd); };
+    }, []);
+
+    // Active Modes
     const activeModes = ALL_MODES.filter(m => enabledModes[m.id]);
     const renderModes = activeModes.length > 0 ? activeModes : [ALL_MODES[0]];
-    useEffect(() => { if (!enabledModes[mode]) setMode(renderModes[0].id); }, [enabledModes]);
+    useEffect(() => { if (!enabledModes[mode]) setMode(renderModes[0].id); }, [enabledModes, mode, renderModes]);
 
-    // Derived State for Typing Indicator
-    const showTypingIndicator = isLoading && (
-        mode !== 'chat' || 
-        messages.length === 0 || 
-        messages[messages.length - 1].role !== 'assistant' || 
-        !messages[messages.length - 1].content
-    );
+    // Export Logic
+    const exportAllChats = async () => {
+        if (!history.length && !messages.length) { showToast("No data to export", 'info'); return; }
+        showToast("Preparing export...", 'info');
+        
+        const zip = new JSZip();
+        const chatsToExport = [...history];
+        if (messages.length > 0 && !sessionId) {
+            chatsToExport.push({ id: 'current', title: 'Current Session', date: new Date().toISOString(), messages });
+        }
+
+        try {
+            const mediaFolder = zip.folder("media");
+            for (const chat of chatsToExport) {
+                let content = `# ${chat.title}\nDate: ${new Date(chat.date).toLocaleString()}\n\n`;
+                for (const msg of chat.messages) {
+                    content += `### ${msg.role.toUpperCase()}\n`;
+                    if (msg.type === 'text') content += `${msg.content}\n\n`;
+                    else if (['image', 'video', 'audio'].includes(msg.type)) {
+                        const ext = msg.type === 'image' ? 'png' : msg.type === 'video' ? 'mp4' : 'mp3';
+                        const filename = `${chat.id}_${Date.now()}_${Math.random().toString(36).substr(2,5)}.${ext}`;
+                        if (msg.content.startsWith('data:')) {
+                            mediaFolder?.file(filename, msg.content.split(',')[1], {base64: true});
+                            content += `![${msg.type}](media/${filename})\n\n`;
+                        } else content += `[Link to ${msg.type}](${msg.content})\n\n`;
+                    }
+                    else if (msg.type === 'user-media' && msg.files) {
+                        msg.files.forEach(f => content += `[Attached: ${f.name}]\n`);
+                        content += `\n${msg.content}\n\n`;
+                    }
+                }
+                zip.file(`${chat.title.replace(/[^a-z0-9]/gi, '_').slice(0, 50)}.md`, content);
+            }
+            const blob = await zip.generateAsync({ type: "blob" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = `zen-export-${new Date().toISOString().slice(0,10)}.zip`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            showToast("Export complete!", 'success');
+        } catch (e) { console.error(e); showToast("Export failed", 'error'); }
+    };
+
+    const showTypingIndicator = isLoading && (mode !== 'chat' || !messages.length || messages[messages.length - 1].role !== 'assistant' || !messages[messages.length - 1].content);
 
     return (
-        <div ref={appRef} className={`fixed inset-0 flex flex-col font-sans selection:bg-zinc-300 dark:selection:bg-zinc-700 transition-colors duration-500 ${privateMode ? 'bg-stripes' : ''} bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100`}>
-            
+        <div ref={appRef} className={`fixed inset-0 flex flex-col font-sans selection:bg-zinc-300 dark:selection:bg-zinc-700 transition-colors duration-500 ${privateMode ? 'bg-stripes' : ''} bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100`}>
             <ToastContainer toasts={toasts} removeToast={removeToast} />
 
-            {/* CONTROLS */}
+            {/* Drag Overlay */}
+            {isDragging && (
+                <div className="fixed inset-0 z-[100] bg-zinc-900/80 backdrop-blur-sm flex items-center justify-center border-4 border-dashed border-zinc-500 m-4 rounded-3xl animate-fade-in pointer-events-none">
+                    <div className="text-white text-2xl font-bold flex flex-col items-center gap-4"><Icons.Download size={48} /> Drop files to attach</div>
+                </div>
+            )}
+
+            {/* Header / Nav */}
             <div className="absolute top-4 left-4 z-[60] flex gap-3">
-                <button onClick={() => handleSidebarToggle(!sidebarOpen)} title="Menu" className={`w-12 h-12 rounded-full glass-btn flex items-center justify-center transition-all text-zinc-800 dark:text-zinc-200 hover:scale-105 active:scale-95`}>
+                <button onClick={() => setSidebarOpen(!sidebarOpen)} title="Menu" className={`w-12 h-12 rounded-full glass-btn flex items-center justify-center transition-all text-zinc-800 dark:text-zinc-200 hover:scale-105 active:scale-95`}>
                     {sidebarOpen ? <Icons.MenuOpen size={20} /> : <Icons.Menu size={20} />}
                 </button>
-                <button onClick={createNewChat} title="New Chat" className={`w-12 h-12 rounded-full glass-btn flex items-center justify-center transition-all text-zinc-800 dark:text-zinc-200 hover:scale-105 active:scale-95 duration-300 ${sidebarOpen ? 'opacity-0 pointer-events-none translate-x-[-20px]' : 'opacity-100 translate-x-0'}`}>
+                <button onClick={createNewChat} title="New Chat" className={`w-12 h-12 rounded-full glass-btn flex items-center justify-center transition-all text-zinc-800 dark:text-zinc-200 hover:scale-105 active:scale-95 duration-300 ${sidebarOpen ? 'opacity-0 pointer-events-none -translate-x-5' : 'opacity-100 translate-x-0'}`}>
                     <Icons.Plus size={20} />
                 </button>
             </div>
@@ -477,22 +478,32 @@ function App() {
                     <Icons.Info size={20} />
                 </button>
                 <button onClick={() => {
-                    setPrivateMode(!privateMode); setMessages([]); setSessionId(null); setFiles([]); setInput(''); if (!privateMode && isMobile) handleSidebarToggle(false);
+                    setPrivateMode(!privateMode); setMessages([]); setSessionId(null); setFiles([]); setInput(''); if (!privateMode && isMobile) setSidebarOpen(false);
                     showToast(privateMode ? "Private mode disabled" : "Private mode enabled", 'info');
                 }} className={`w-12 h-12 rounded-full glass-btn flex items-center justify-center transition-all hover:scale-105 active:scale-95 ${privateMode ? 'text-zinc-900 dark:text-zinc-100 border-2 border-zinc-900 dark:border-zinc-100' : 'text-zinc-800 dark:text-zinc-200'}`} title={privateMode ? "Exit Private Mode" : "Private Chat"}>
                     {privateMode ? <Icons.LogOut size={18} /> : <Icons.Ghost size={22} />}
                 </button>
             </div>
 
-            {/* PREVIEW */}
+            {/* Sidebar */}
+            <Sidebar 
+                isOpen={sidebarOpen} setIsOpen={setSidebarOpen} privateMode={privateMode} history={history} sessionId={sessionId}
+                loadChat={loadChat} createNewChat={createNewChat} deleteChat={(id) => { if(confirm("Delete?")) { setHistory(prev => prev.filter(h => h.id !== id)); if(sessionId === id) createNewChat(); showToast("Chat deleted", 'info'); } }} 
+                updateChatTitle={(id, title) => setHistory(prev => prev.map(h => h.id === id ? { ...h, title } : h))}
+                user={user} onLogin={handleLogin} onLogout={async () => { await puterService.signOut(); setUser(null); showToast("Logged out", 'info'); }} 
+                onOpenSettings={() => setSettingsOpen(true)} installPrompt={installPrompt} onInstall={() => { installPrompt?.prompt(); setInstallPrompt(null); }}
+                searchQuery={searchQuery} setSearchQuery={setSearchQuery} exportAllChats={exportAllChats} messages={messages}
+            />
+
+            {/* Media Preview Modal */}
             {previewMedia && (
                 <div className="fixed inset-0 z-[80] bg-black/90 flex flex-col animate-fade-in backdrop-blur-md" onClick={() => setPreviewMedia(null)}>
-                    <div className="flex justify-between items-center p-4" onClick={e => e.stopPropagation()}>
+                    <div className="flex justify-between items-center p-4">
                         <div className="text-white font-medium opacity-80">Media Preview</div>
                         <button onClick={() => setPreviewMedia(null)} className="p-2 text-white/70 hover:text-white bg-white/10 rounded-full hover:bg-white/20 transition"><Icons.X size={24}/></button>
                     </div>
                     <div className="flex-1 flex items-center justify-center p-4 overflow-hidden" onClick={e => e.stopPropagation()}>
-                        {previewMedia.type === 'image' && <img src={previewMedia.content} className="max-w-full max-h-full object-contain rounded shadow-2xl" />}
+                        {previewMedia.type === 'image' && <img src={previewMedia.content} className="max-w-full max-h-full object-contain rounded shadow-2xl" alt="Preview"/>}
                         {previewMedia.type === 'video' && <video src={previewMedia.content} controls autoPlay className="max-w-full max-h-full rounded shadow-2xl" />}
                     </div>
                     <div className="p-6 flex justify-center pb-8" onClick={e => e.stopPropagation()}>
@@ -501,16 +512,7 @@ function App() {
                 </div>
             )}
 
-            <Sidebar 
-                isOpen={sidebarOpen} setIsOpen={handleSidebarToggle} privateMode={privateMode} history={history} sessionId={sessionId}
-                loadChat={loadChat} createNewChat={createNewChat} deleteChat={deleteChat} updateChatTitle={updateChatTitle}
-                user={user} onLogin={handleLogin} onLogout={handleLogout} onOpenSettings={() => setSettingsOpen(true)}
-                installPrompt={installPrompt} onInstall={() => { if(installPrompt) installPrompt.prompt(); setInstallPrompt(null); }}
-                searchQuery={searchQuery} setSearchQuery={setSearchQuery} exportAllChats={exportAllChats}
-                messages={messages}
-            />
-
-            {/* MAIN */}
+            {/* Main Content */}
             <div className={`flex-1 flex flex-col h-full relative min-w-0 transition-all duration-300`}>
                 <main ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-3 md:p-8 pt-24 pb-36 md:pb-44 scroll-smooth z-0">
                     {!messages.length && (
@@ -531,13 +533,12 @@ function App() {
                             );
                         })}
                         
-                        {/* Dynamic Typing Indicator */}
                         {showTypingIndicator && (
                             <div className="flex items-center gap-2 p-2 ml-1 animate-fade-in h-8 self-start">
                                 <div className="flex items-center gap-1.5 bg-zinc-200 dark:bg-zinc-800 px-4 py-2.5 rounded-2xl rounded-tl-none">
-                                    <div className="w-1.5 h-1.5 bg-zinc-500 dark:bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                                    <div className="w-1.5 h-1.5 bg-zinc-500 dark:bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                                    <div className="w-1.5 h-1.5 bg-zinc-500 dark:bg-zinc-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                    <div className="w-1.5 h-1.5 bg-zinc-500 dark:bg-zinc-400 rounded-full animate-bounce delay-0" />
+                                    <div className="w-1.5 h-1.5 bg-zinc-500 dark:bg-zinc-400 rounded-full animate-bounce delay-150" />
+                                    <div className="w-1.5 h-1.5 bg-zinc-500 dark:bg-zinc-400 rounded-full animate-bounce delay-300" />
                                 </div>
                             </div>
                         )}
@@ -546,15 +547,16 @@ function App() {
                 </main>
 
                 {showScrollDown && (
-                    <button onClick={() => { isAutoScrolling.current = true; scrollToBottom(); }} className="absolute bottom-32 md:bottom-36 left-1/2 -translate-x-1/2 z-40 w-10 h-10 flex items-center justify-center bg-zinc-800/90 dark:bg-zinc-200/90 backdrop-blur text-white dark:text-black rounded-full shadow-lg hover:scale-110 transition-transform">
+                    <button onClick={() => { isAutoScrolling.current = true; scrollToBottom(); }} className="absolute bottom-36 md:bottom-40 left-1/2 -translate-x-1/2 z-50 w-10 h-10 flex items-center justify-center bg-zinc-800/90 dark:bg-zinc-200/90 backdrop-blur-md text-white dark:text-black rounded-full shadow-lg hover:scale-110 transition-transform">
                         <Icons.ChevronDown size={20}/>
                     </button>
                 )}
 
                 <InputArea 
-                    input={input} setInput={setInput} handleSend={handleSend} files={files}
+                    input={input} setInput={setInput} handleSend={handleSend} stopGeneration={stopGeneration} files={files}
                     onRemoveFile={(idx) => setFiles(prev => prev.filter((_, i) => i !== idx))}
-                    onFileSelect={handleFileSelect} isListening={isListening} toggleMic={toggleMic}
+                    onFileSelect={(e) => { if(e.target.files) { const nf=Array.from(e.target.files); setFiles(p=>[...p, ...nf.map(f=>({name:f.name, type:f.type, content:URL.createObjectURL(f)}))]); e.target.value=''; } }}
+                    isListening={isListening} toggleMic={toggleMic}
                     mode={mode} setMode={setMode} renderModes={renderModes} isLoading={isLoading}
                     privateMode={privateMode} isSpeechSupported={isSpeechSupported}
                 />
@@ -565,22 +567,11 @@ function App() {
             {settingsOpen && (
                 <SettingsModal 
                     onClose={() => setSettingsOpen(false)} 
-                    themeMode={themeMode} changeThemeMode={changeThemeMode}
-                    enabledModes={enabledModes} toggleModeEnabled={(id) => {
-                        const newState = { ...enabledModes, [id]: !enabledModes[id] };
-                        setEnabledModes(newState);
-                        localStorage.setItem('zen_enabled_modes', JSON.stringify(newState));
-                    }}
-                    allModes={ALL_MODES}
-                    model={model} setModel={(m) => { setModel(m); localStorage.setItem('zen_model', m); }}
-                    availableModels={availableModels}
-                    systemPrompt={systemPrompt}
-                    setSystemPrompt={(s) => { setSystemPrompt(s); localStorage.setItem('zen_system_prompt', s); }}
-                    onClearHistory={() => { 
-                        if(confirm("Clear local history?")) { 
-                            localStorage.removeItem('zen_history'); setHistory([]); setMessages([]); setSessionId(null); setSettingsOpen(false); 
-                        }
-                    }}
+                    themeMode={themeMode} changeThemeMode={(m) => { setThemeMode(m); localStorage.setItem('zen_theme_mode', m); }}
+                    enabledModes={enabledModes} toggleModeEnabled={(id) => { const n={...enabledModes, [id]:!enabledModes[id]}; setEnabledModes(n); localStorage.setItem('zen_enabled_modes', JSON.stringify(n)); }}
+                    allModes={ALL_MODES} model={model} setModel={(m) => { setModel(m); localStorage.setItem('zen_model', m); }} availableModels={availableModels}
+                    systemPrompt={systemPrompt} setSystemPrompt={(s) => { setSystemPrompt(s); localStorage.setItem('zen_system_prompt', s); }}
+                    onClearHistory={() => { if(confirm("Clear local history?")) { localStorage.removeItem('zen_history'); setHistory([]); setMessages([]); setSessionId(null); setSettingsOpen(false); } }}
                 />
             )}
 
@@ -593,21 +584,17 @@ function App() {
                         <p className="text-sm opacity-60 mb-6">Refactored Version</p>
                         
                         <div className="grid grid-cols-2 gap-3 mb-6">
-                            <a href="#" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 py-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-700 transition font-medium text-xs">
-                                <Icons.Github size={16}/> GitHub
-                            </a>
-                            <a href="#" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 py-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-700 transition font-medium text-xs">
-                                <Icons.Linkedin size={16}/> LinkedIn
-                            </a>
-                            <a href="#" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 py-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-700 transition font-medium text-xs">
-                                <Icons.Bluesky size={16}/> Bluesky
-                            </a>
-                            <a href="mailto:contact@example.com" className="flex items-center justify-center gap-2 py-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-700 transition font-medium text-xs">
-                                <Icons.Mail size={16}/> Email
-                            </a>
+                            {['GitHub', 'LinkedIn', 'Bluesky', 'Email'].map(l => (
+                                <a key={l} href="#" className="flex items-center justify-center gap-2 py-3 bg-zinc-100 dark:bg-zinc-800 rounded-xl hover:bg-zinc-200 dark:hover:bg-zinc-700 transition font-medium text-xs">
+                                    {l === 'GitHub' && <Icons.Github size={16}/>}
+                                    {l === 'LinkedIn' && <Icons.Linkedin size={16}/>}
+                                    {l === 'Bluesky' && <Icons.Bluesky size={16}/>}
+                                    {l === 'Email' && <Icons.EmailEnvelope size={16}/>}
+                                    {l}
+                                </a>
+                            ))}
                         </div>
-                        
-                        <div className="mt-4 text-[10px] opacity-40 uppercase tracking-widest">v2.1.0 &bull; Powered by Puter.js</div>
+                        <div className="mt-4 text-[10px] opacity-40 uppercase tracking-widest">v2.1.4 &bull; Powered by Puter.js</div>
                     </div>
                 </div>
             )}

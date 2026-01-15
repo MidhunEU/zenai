@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
 import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
-import { Message, AttachedFile } from '../types';
+import { Message } from '../types';
 import { Icons } from './Icons';
 
 interface MessageItemProps {
@@ -17,20 +17,13 @@ interface MessageItemProps {
 const MessageItem: React.FC<MessageItemProps> = React.memo(({ msg, onMediaClick, showToast }) => {
     const [isSpeaking, setIsSpeaking] = useState(false);
 
-    // Monitor global speech state to reset icon if speech stops elsewhere
+    // Cancel speech if component unmounts
     useEffect(() => {
-        const onEnd = () => setIsSpeaking(false);
-        const onStart = () => { /* Check if *this* text is what is being spoken is hard without ID, 
-                                   so we rely on local logic mostly, but reset if global stops */ };
-        
-        // Simple polling to sync state if cancelled externally
-        const interval = setInterval(() => {
-             if (!window.speechSynthesis.speaking && isSpeaking) {
-                 setIsSpeaking(false);
-             }
-        }, 500);
-
-        return () => clearInterval(interval);
+        return () => {
+            if (isSpeaking) {
+                window.speechSynthesis.cancel();
+            }
+        };
     }, [isSpeaking]);
 
     const copyContent = (text: string) => {
@@ -43,36 +36,43 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({ msg, onMediaClick,
             window.speechSynthesis.cancel();
             setIsSpeaking(false);
         } else {
-            // Cancel any ongoing speech first
+            // Reset any stuck synthesis
             window.speechSynthesis.cancel();
             
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.onend = () => setIsSpeaking(false);
-            utterance.onerror = () => setIsSpeaking(false);
+            utterance.onerror = (e) => {
+                console.warn("Speech error", e);
+                setIsSpeaking(false);
+            };
             
-            window.speechSynthesis.speak(utterance);
             setIsSpeaking(true);
+            window.speechSynthesis.speak(utterance);
         }
     };
 
-    // Preprocess content to ensure LaTeX delimiters are standard ($ and $$)
+    // Robust LaTeX delimiter processing and markdown cleanup
     const processedContent = useMemo(() => {
         if (msg.type !== 'text' || !msg.content) return '';
         let content = msg.content;
-        
-        // Convert \[ ... \] to $$ ... $$
-        content = content.replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$');
-        
-        // Convert \( ... \) to $ ... $
-        content = content.replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$$');
-        
+
+        // Fix: Prevent indentation from triggering code blocks for lists and bold text.
+        // LLMs sometimes indent these items with 4 spaces, which Markdown parsers treat as code blocks.
+        // We strip the leading 4 spaces if followed by a list marker (*, -, +), ordered list (1.), or bold (**).
+        content = content.replace(/^ {4}(?=[-*+]|\*\*|\d+\.)/gm, '');
+
+        // Standardize delimiters
+        content = content.replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$'); // \[ \] -> $$ $$
+        content = content.replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$$');     // \( \) -> $ $
         return content;
     }, [msg.content, msg.type]);
+
+    // --- Media Renders ---
 
     if (msg.type === 'image') return (
         <div className="group relative cursor-zoom-in" onClick={() => onMediaClick({ type: 'image', content: msg.content })}>
             <img src={msg.content} className="rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-700" alt="Generated" />
-            <a href={msg.content} download={`zen-${Date.now()}.png`} target="_blank" rel="noopener noreferrer" className="absolute bottom-2 right-2 w-8 h-8 flex items-center justify-center bg-black/60 backdrop-blur-sm text-white rounded-full transition-opacity hover:bg-black/80" onClick={e=>e.stopPropagation()} title="Download Image"><Icons.Download size={14}/></a>
+            <a href={msg.content} download={`zen-${Date.now()}.png`} onClick={e=>e.stopPropagation()} className="absolute bottom-2 right-2 w-8 h-8 flex items-center justify-center bg-black/60 backdrop-blur-sm text-white rounded-full hover:bg-black/80 transition-colors"><Icons.Download size={14}/></a>
         </div>
     );
 
@@ -83,27 +83,25 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({ msg, onMediaClick,
     );
 
     if (msg.type === 'audio') return (
-        <div className="group relative w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-700 p-4 shadow-sm" onClick={e => e.stopPropagation()}>
+        <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-700 p-4 shadow-sm">
             <audio src={msg.content} controls className="w-full h-8 mb-3" />
             <div className="flex justify-end">
-                <a href={msg.content} download={`zen-audio-${Date.now()}.mp3`} className="flex items-center gap-1.5 text-xs font-bold text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors bg-zinc-100 dark:bg-zinc-800 px-3 py-1.5 rounded-full" title="Download Audio">
+                <a href={msg.content} download={`zen-audio-${Date.now()}.mp3`} className="flex items-center gap-1.5 text-xs font-bold text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors bg-zinc-100 dark:bg-zinc-800 px-3 py-1.5 rounded-full">
                     <Icons.Download size={14}/> MP3
                 </a>
             </div>
         </div>
     );
 
-    if (msg.type === 'user-media') {
-        return (
-            <div className="flex flex-wrap gap-2">
-                {msg.files?.map((f, idx) => (
-                    <div key={idx} className="group relative cursor-zoom-in overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm" onClick={() => f.type.startsWith('image') && onMediaClick({ type: 'image', content: f.content })}>
-                        {f.type.startsWith('image') ? <img src={f.content} className="h-32 w-auto object-cover" /> : <div className="h-20 w-32 flex items-center justify-center bg-zinc-100 dark:bg-zinc-800"><Icons.File size={24} className="opacity-50"/></div>}
-                    </div>
-                ))}
-            </div>
-        );
-    }
+    if (msg.type === 'user-media') return (
+        <div className="flex flex-wrap gap-2">
+            {msg.files?.map((f, idx) => (
+                <div key={idx} className="relative cursor-zoom-in overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm" onClick={() => f.type.startsWith('image') && onMediaClick({ type: 'image', content: f.content })}>
+                    {f.type.startsWith('image') ? <img src={f.content} className="h-32 w-auto object-cover" /> : <div className="h-20 w-32 flex items-center justify-center bg-zinc-100 dark:bg-zinc-800"><Icons.File size={24} className="opacity-50"/></div>}
+                </div>
+            ))}
+        </div>
+    );
 
     if (msg.type === 'error') return (
         <div className="text-red-500 text-sm font-medium bg-red-50 dark:bg-red-900/10 p-3 rounded-lg border border-red-100 dark:border-red-900/20">
@@ -111,19 +109,17 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({ msg, onMediaClick,
         </div>
     );
 
-    if (msg.isOCR || msg.isTranscribe) {
-        return (
-            <div className="relative group w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 shadow-sm">
-                <div className="flex items-center gap-2 mb-2 pb-2 border-b border-zinc-200 dark:border-zinc-800 opacity-60 text-xs font-medium uppercase tracking-wider">
-                    {msg.isOCR ? <><Icons.ScanText size={14}/> Scanned Text</> : <><Icons.Mic size={14}/> Transcript</>}
-                </div>
-                <div className="font-mono text-sm leading-relaxed whitespace-pre-wrap opacity-90 text-zinc-800 dark:text-zinc-200 selectable">{msg.content}</div>
-                <div className="mt-3 flex justify-end gap-3 opacity-80 hover:opacity-100 transition-opacity">
-                    <button onClick={() => copyContent(msg.content)} className="flex items-center gap-1.5 text-xs font-medium hover:text-zinc-600 dark:hover:text-zinc-300" title="Copy Text"><Icons.Copy size={12}/> Copy</button>
-                </div>
+    if (msg.isOCR || msg.isTranscribe) return (
+        <div className="relative group w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-2 pb-2 border-b border-zinc-200 dark:border-zinc-800 opacity-60 text-xs font-medium uppercase tracking-wider">
+                {msg.isOCR ? <><Icons.ScanText size={14}/> Scanned Text</> : <><Icons.Mic size={14}/> Transcript</>}
             </div>
-        );
-    }
+            <div className="font-mono text-sm leading-relaxed whitespace-pre-wrap opacity-90 text-zinc-800 dark:text-zinc-200 selectable">{msg.content}</div>
+            <div className="mt-3 flex justify-end gap-3 opacity-80 hover:opacity-100 transition-opacity">
+                <button onClick={() => copyContent(msg.content)} className="flex items-center gap-1.5 text-xs font-medium hover:text-zinc-600 dark:hover:text-zinc-300"><Icons.Copy size={12}/> Copy</button>
+            </div>
+        </div>
+    );
 
     // Standard Text
     return (
@@ -134,32 +130,20 @@ const MessageItem: React.FC<MessageItemProps> = React.memo(({ msg, onMediaClick,
                         remarkPlugins={[remarkMath, remarkGfm]}
                         rehypePlugins={[rehypeRaw, rehypeKatex, rehypeHighlight]}
                         components={{
-                            table: ({ node, ...props }) => (
-                                <div className="table-wrapper">
-                                    <table {...props} />
-                                </div>
-                            ),
-                            pre: ({ node, children, ...props }) => (
+                            table: (props) => <div className="table-wrapper"><table {...props} /></div>,
+                            pre: ({ children, ...props }) => (
                                 <div className="code-wrapper my-3 rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-[#1e1e1e] shadow-sm">
                                     <div className="flex justify-between items-center px-4 py-2 bg-zinc-100 dark:bg-[#2d2d2d] border-b border-zinc-200 dark:border-zinc-700 text-xs text-zinc-500 font-mono select-none">
                                         <span>Code</span>
-                                        <button 
-                                            className="flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors font-sans opacity-70 hover:opacity-100"
-                                            onClick={(e) => {
-                                                const code = (e.currentTarget.parentElement?.nextElementSibling as HTMLElement)?.innerText;
-                                                if(code) copyContent(code);
-                                            }}
-                                            title="Copy Code"
-                                        >
-                                            Copy
-                                        </button>
+                                        <button className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors opacity-70 hover:opacity-100" onClick={(e) => {
+                                            const code = (e.currentTarget.parentElement?.nextElementSibling as HTMLElement)?.innerText;
+                                            if(code) copyContent(code);
+                                        }}>Copy</button>
                                     </div>
                                     <pre {...props} className="!m-0 !bg-transparent !p-4 overflow-x-auto custom-scrollbar selectable">{children}</pre>
                                 </div>
                             ),
-                            code: ({ node, className, children, ...props }: any) => {
-                                return <code className={className} {...props}>{children}</code>;
-                            }
+                            code: ({ className, children, ...props }: any) => <code className={className} {...props}>{children}</code>
                         }}
                     >
                         {processedContent}
