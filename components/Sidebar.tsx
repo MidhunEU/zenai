@@ -66,8 +66,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                 {privateMode ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-6 text-center opacity-60">
                         <div className="text-zinc-500 mb-4"><Icons.Ghost size={32}/></div>
-                        <p className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm">Incognito Active</p>
-                        <p className="text-xs mt-1 text-zinc-600 dark:text-zinc-400">History paused.</p>
+                        <p className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm">Private Chat</p>
+                        <p className="text-xs mt-1 text-zinc-600 dark:text-zinc-400">Chat history paused.</p>
                     </div>
                 ) : (
                     <>
@@ -87,7 +87,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             <button onClick={createNewChat} title="Start new chat" className="w-full flex items-center justify-center gap-2 py-3 mb-4 rounded-xl transition font-medium shadow-sm bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:opacity-90"><Icons.Plus size={18} /> New Chat</button>
                             
                             {history.length === 0 ? (
-                                <div className="flex-1 flex items-center justify-center text-center text-sm text-zinc-500 dark:text-zinc-500 font-medium">No history yet.</div>
+                                <div className="flex-1 flex items-center justify-center text-center text-sm text-zinc-500 dark:text-zinc-500 font-medium">No chat history found.</div>
                             ) : (
                                 filteredHistory.map(h => (
                                     <div key={h.id} onClick={() => loadChat(h.id)} title={`Chat: ${h.title}`} className={`group relative flex items-center p-3 rounded-xl cursor-pointer text-sm transition-all ${sessionId === h.id ? 'bg-zinc-100 dark:bg-zinc-800 font-medium text-zinc-900 dark:text-zinc-100' : 'hover:bg-black/5 dark:hover:bg-white/5 opacity-80 hover:opacity-100 text-zinc-700 dark:text-zinc-300'}`}>
