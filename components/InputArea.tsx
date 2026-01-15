@@ -87,7 +87,7 @@ const InputArea: React.FC<InputAreaProps> = ({
                             onKeyDown={handleKeyDown} 
                             disabled={isLoading}
                             enterKeyHint="send"
-                            placeholder={files.length > 0 ? `${files.length} file(s) attached` : (isListening ? "Listening..." : (privateMode ? "Just you and me" : "Ask me anything"))} 
+                            placeholder={files.length > 0 ? `${files.length} file(s) attached` : (isListening ? "Listening..." : (privateMode ? "I have amnesia" : "Ask me anything"))} 
                             className="w-full bg-transparent border-none focus:ring-0 resize-none py-2 px-1 text-base min-h-[40px] max-h-[140px] outline-none leading-relaxed custom-scrollbar text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-600 dark:placeholder:text-zinc-500 placeholder:opacity-100 disabled:opacity-50" 
                             rows={1} 
                         />
