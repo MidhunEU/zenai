@@ -118,7 +118,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             <div className="w-8 h-8 rounded-full bg-zinc-300 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-200 flex items-center justify-center text-xs font-bold">{user.username.substring(0,2).toUpperCase()}</div>
                             <div className="flex-1 overflow-hidden">
                                 <div className="text-sm font-medium truncate text-zinc-900 dark:text-zinc-100">{user.username}</div>
-                                <button onClick={(e) => { e.stopPropagation(); onLogout(); }} title="Log out" className="text-[10px] text-red-500 font-bold hover:underline cursor-pointer tracking-wide">LOG OUT</button>
+                                <button onClick={(e) => { e.stopPropagation(); onLogout(); }} title="Sign Out" className="text-[10px] text-red-500 font-bold hover:underline cursor-pointer tracking-wide">Sign Out</button>
                             </div>
                         </div>
                     ) : (
