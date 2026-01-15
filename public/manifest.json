@@ -1,0 +1,24 @@
+{
+  "name": "Zen AI",
+  "short_name": "Zen AI",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#18181b",
+  "theme_color": "#18181b",
+  "description": "A minimalist, multimodal AI assistant.",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://upload.wikimedia.org/wikipedia/commons/c/c0/Yin_yang_%28fixed_width%29.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://upload.wikimedia.org/wikipedia/commons/c/c0/Yin_yang_%28fixed_width%29.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

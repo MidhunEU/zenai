@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+    <title>Zen AI</title>
+    <meta name="description" content="A minimalist, multimodal AI assistant.">
+    <meta name="theme-color" content="#18181b">
+    
+    <!-- PWA Settings -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Zen AI">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="https://upload.wikimedia.org/wikipedia/commons/c/c0/Yin_yang_%28fixed_width%29.svg">
+    <link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/c/c0/Yin_yang_%28fixed_width%29.svg">
+
+    <!-- Puter.js v2 -->
+    <script src="https://js.puter.com/v2/"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { 
+                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'monospace'] 
+                    },
+                    colors: {
+                        zinc: { 850: '#202023', 900: '#18181b', 950: '#09090b' },
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.25s ease-out',
+                        'slide-up': 'slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+                    },
+                    keyframes: {
+                        fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+                        slideUp: { '0%': { transform: 'translateY(12px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Styles for libraries -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+        
+        html, body { height: 100%; width: 100%; overflow: hidden; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+        
+        /* Typography Polish */
+        body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.1); border-radius: 99px; }
+        ::-webkit-scrollbar-thumb:hover { background-color: rgba(0,0,0,0.2); }
+        .dark ::-webkit-scrollbar-thumb { background-color: rgba(255,255,255,0.1); }
+        .dark ::-webkit-scrollbar-thumb:hover { background-color: rgba(255,255,255,0.2); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Glass Utilities */
+        .glass-btn { 
+            background: rgba(255, 255, 255, 0.85); 
+            backdrop-filter: blur(12px); 
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(0,0,0,0.08); 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+        }
+        .dark .glass-btn { 
+            background: rgba(24, 24, 27, 0.85); 
+            border: 1px solid rgba(255,255,255,0.08); 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+
+        .glass-dock {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border-top: 1px solid rgba(0,0,0,0.05);
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.05);
+        }
+        .dark .glass-dock {
+            background: rgba(24, 24, 27, 0.92);
+            border-top: 1px solid rgba(255,255,255,0.05);
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+        }
+
+        /* Private Mode Stripes */
+        .bg-stripes {
+            background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 20px);
+        }
+        .dark .bg-stripes {
+            background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.02) 10px, rgba(255,255,255,0.02) 20px);
+        }
+
+        /* Markdown Overrides */
+        .markdown-body { font-size: 0.95rem; }
+        .markdown-body p { margin-bottom: 0.8em; line-height: 1.6; }
+        .markdown-body p:last-child { margin-bottom: 0; }
+        .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 { margin-top: 1.2em; margin-bottom: 0.6em; font-weight: 600; line-height: 1.25; }
+        .markdown-body ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.8em; }
+        .markdown-body ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 0.8em; }
+        .markdown-body li { margin-bottom: 0.3em; }
+        .markdown-body blockquote { border-left: 3px solid #71717a; padding-left: 1em; margin: 1em 0; color: #71717a; font-style: italic; }
+        .markdown-body a { color: #52525b; text-decoration: underline; text-underline-offset: 2px; } 
+        .dark .markdown-body a { color: #d4d4d8; }
+        .markdown-body pre code { background: transparent; padding: 0; color: inherit; font-family: 'JetBrains Mono', monospace; }
+        
+        /* Math & Latex fixes */
+        .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.5em 0; margin: 1em 0; max-width: 100%; }
+        /* Larger Font for Latex */
+        .katex { font-size: 1.3em !important; line-height: 1.3; }
+        
+        /* Subscript / Superscript */
+        sup { font-size: 0.75em; vertical-align: super; line-height: 0; }
+        sub { font-size: 0.75em; vertical-align: sub; line-height: 0; }
+
+        /* Tables - Enforce Wrapping */
+        .table-wrapper { 
+            overflow-x: auto; 
+            margin-bottom: 1em; 
+            border-radius: 8px; 
+            border: 1px solid rgba(128,128,128,0.2); 
+            max-width: 100%;
+        }
+        .markdown-body table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            font-size: 0.95em; 
+            table-layout: fixed; /* Crucial for wrapping */
+        }
+        .markdown-body th, .markdown-body td { 
+            border: 1px solid rgba(128, 128, 128, 0.2); 
+            padding: 0.6em 0.8em; 
+            text-align: left; 
+            white-space: normal;
+            word-wrap: break-word; /* Wrap long words */
+            word-break: break-word;
+            overflow-wrap: break-word;
+        }
+        .markdown-body th { background-color: rgba(0,0,0,0.03); font-weight: 600; }
+        .dark .markdown-body th { background-color: rgba(255,255,255,0.05); border-color: rgba(255, 255, 255, 0.1); }
+        .dark .markdown-body td { border-color: rgba(255, 255, 255, 0.1); }
+
+        /* Utility for touch targets */
+        button, a, input, select, textarea { touch-action: manipulation; }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
+    "remark-gfm": "https://esm.sh/remark-gfm@^4.0.1",
+    "rehype-katex": "https://esm.sh/rehype-katex@^7.0.1",
+    "rehype-raw": "https://esm.sh/rehype-raw@^7.0.0",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "remark-math": "https://esm.sh/remark-math@^6.0.0",
+    "rehype-highlight": "https://esm.sh/rehype-highlight@^7.0.2",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "jszip": "https://esm.sh/jszip@^3.10.1"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 transition-colors duration-500 overflow-hidden">
+    <div id="root"></div>
+    <!-- Entry Point for Vite -->
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>

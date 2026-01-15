@@ -1,0 +1,7 @@
+{
+  "name": "Zen AI",
+  "description": "A minimalist, multimodal AI assistant powered by Puter.js.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
