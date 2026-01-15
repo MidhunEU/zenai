@@ -459,7 +459,7 @@ function App() {
             {/* Drag Overlay */}
             {isDragging && (
                 <div className="fixed inset-0 z-[100] bg-zinc-900/80 backdrop-blur-sm flex items-center justify-center border-4 border-dashed border-zinc-500 m-4 rounded-3xl animate-fade-in pointer-events-none">
-                    <div className="text-white text-2xl font-bold flex flex-col items-center gap-4"><Icons.Download size={48} /> Drag and Drop Attachments</div>
+                    <div className="text-white text-2xl font-bold flex flex-col items-center gap-4"><Icons.Download size={48} />Drop your files here</div>
                 </div>
             )}
 
