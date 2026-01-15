@@ -8,7 +8,7 @@ A minimalist, multimodal AI assistant powered by [Puter.js](https://docs.puter.c
 
 ## Features
 
-- **Chat**: Text-based conversation with AI (using model apis provided by [Puter](developer.puter.com/).
+- **Chat**: Text-based conversation with AI (GPT-4o mini).
 - **Multimodal**:
     - **Text-to-Image**: Generate images from prompts.
     - **Text-to-Video**: Create short videos.
