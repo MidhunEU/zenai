@@ -39,7 +39,7 @@ export const SettingsModal: React.FC<{
                         />
                         <div className="absolute top-3 left-3 text-zinc-500 dark:text-zinc-400 pointer-events-none"><Icons.Sparkles size={16}/></div>
                     </div>
-                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400 px-1">Instructions for how the AI Models should behave.</p>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400 px-1">Instructions for how your AI should behave.</p>
                 </div>
 
                 <div className="space-y-3">
