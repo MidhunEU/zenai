@@ -118,13 +118,13 @@ const Sidebar: React.FC<SidebarProps> = ({
                             <div className="w-8 h-8 rounded-full bg-zinc-300 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-200 flex items-center justify-center text-xs font-bold">{user.username.substring(0,2).toUpperCase()}</div>
                             <div className="flex-1 overflow-hidden">
                                 <div className="text-sm font-medium truncate text-zinc-900 dark:text-zinc-100">{user.username}</div>
-                                <button onClick={(e) => { e.stopPropagation(); onLogout(); }} title="Sign Out" className="text-[10px] text-red-500 font-bold hover:underline cursor-pointer tracking-wide">Sign Out</button>
+                                <button onClick={(e) => { e.stopPropagation(); onLogout(); }} title="Sign Out" className="text-[10px] text-red-500 font-bold hover:underline cursor-pointer tracking-wide">Sign out</button>
                             </div>
                         </div>
                     ) : (
-                        <button onClick={onLogin} title="Sign in with Puter.js" className="w-full py-3 mb-2 text-xs font-medium border border-zinc-300 dark:border-zinc-700 rounded-xl hover:bg-white dark:hover:bg-zinc-800 transition text-zinc-800 dark:text-zinc-200">Sign In</button>
+                        <button onClick={onLogin} title="Sign in with Puter.js" className="w-full py-3 mb-2 text-xs font-medium border border-zinc-300 dark:border-zinc-700 rounded-xl hover:bg-white dark:hover:bg-zinc-800 transition text-zinc-800 dark:text-zinc-200">Sign in</button>
                     )}
-                    <button onClick={exportAllChats} disabled={history.length === 0 && messages.length === 0} title="Export all data to ZIP" className="w-full flex items-center gap-3 px-3 py-3 text-sm font-medium opacity-70 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition mb-1 text-zinc-800 dark:text-zinc-200"><Icons.Share size={18} /> Export All Data</button>
+                    <button onClick={exportAllChats} disabled={history.length === 0 && messages.length === 0} title="Export all data to ZIP" className="w-full flex items-center gap-3 px-3 py-3 text-sm font-medium opacity-70 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition mb-1 text-zinc-800 dark:text-zinc-200"><Icons.Share size={18} /> Export your data</button>
                     <button onClick={onOpenSettings} title="Open settings" className="w-full flex items-center gap-3 px-3 py-3 text-sm font-medium opacity-70 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition text-zinc-800 dark:text-zinc-200"><Icons.Settings size={18} /> Settings</button>
                 </div>
             </aside>
